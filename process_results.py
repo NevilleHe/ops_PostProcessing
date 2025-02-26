@@ -1,4 +1,5 @@
 import os
+import sys
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import numpy as np
@@ -26,6 +27,21 @@ class ResultProcessor:
         x = (self.root.winfo_screenwidth() // 2) - (width // 2)
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
         self.root.geometry('{}x{}+{}+{}'.format(width, height, x, y))
+        
+        # 设置关闭事件处理
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def on_closing(self):
+        """主窗口关闭事件处理"""
+        if messagebox.askokcancel("退出", "确定要退出程序吗？"):
+            self.cleanup()
+    
+    def cleanup(self):
+        """清理资源并退出程序"""
+        if hasattr(self, 'processing_window'):
+            self.processing_window.destroy()
+        self.root.destroy()
+        os._exit(0)  # 强制结束所有进程
 
     def create_main_ui(self):
         """创建主界面"""
@@ -44,6 +60,9 @@ class ResultProcessor:
         self.processing_window = tk.Toplevel(self.root)
         self.processing_window.title("文件处理")
         
+        # 设置子窗口关闭事件
+        self.processing_window.protocol("WM_DELETE_WINDOW", self.on_processing_window_closing)
+        
         # 文件选择部分
         file_frame = ttk.LabelFrame(self.processing_window, text="文件选择", padding="5")
         file_frame.pack(fill="x", padx=5, pady=5)
@@ -52,7 +71,7 @@ class ResultProcessor:
         a_frame = ttk.Frame(file_frame)
         a_frame.pack(fill="x", padx=5, pady=5)
         
-        ttk.Label(a_frame, text="选择要提取的ECC高度：").pack(side="left")
+        ttk.Label(a_frame, text="选择要使用的A元素：").pack(side="left")
         self.a_vars = []
         for a in self.array_A:
             var = tk.BooleanVar()
@@ -66,7 +85,7 @@ class ResultProcessor:
         ttk.Button(file_frame, text="重置选择", command=self.reset_selection).pack(pady=5)
         
         # b元素选择部分
-        b_frame = ttk.LabelFrame(self.processing_window, text="选择要输出的PGA", padding="5")
+        b_frame = ttk.LabelFrame(self.processing_window, text="选择要输出的b元素", padding="5")
         b_frame.pack(fill="x", padx=5, pady=5)
         
         # 创建复选框变量和控件
@@ -88,7 +107,20 @@ class ResultProcessor:
         ttk.Button(output_frame, text="选择输出位置并生成文件",
                   command=self.generate_output).pack(pady=10)
         
+        # 返回按钮
+        ttk.Button(output_frame, text="返回主界面",
+                  command=self.return_to_main).pack(pady=5)
+        
         self.update_file_list()
+    
+    def on_processing_window_closing(self):
+        """处理窗口关闭事件处理"""
+        self.return_to_main()
+    
+    def return_to_main(self):
+        """返回主界面"""
+        self.processing_window.destroy()
+        self.root.deiconify()  # 显示主窗口
     
     def update_file_list(self):
         """更新文件列表显示"""
@@ -204,6 +236,7 @@ class ResultProcessor:
                 self.generate_function1_output(selected_a, selected_b, output_dir)
             
             messagebox.showinfo("成功", f"文件已生成到：{output_dir}")
+            self.return_to_main()  # 处理完成后返回主界面
             
         except Exception as e:
             messagebox.showerror("错误", f"生成文件时出错：{str(e)}")
@@ -271,12 +304,10 @@ class ResultProcessor:
             output_path = os.path.join(output_dir, output_filename)
             
             with open(output_path, 'w') as f:
-                # 写入表头（A值）
-                f.write('\t'.join(['Type'] + [str(a) for a in selected_a]) + '\n')
-                # 写入RC行
-                f.write('\t'.join(['RC'] + result_rc) + '\n')
-                # 写入ECC行
-                f.write('\t'.join(['ECC'] + result_ecc) + '\n')
+                # 写入每个A值一行
+                for i, a in enumerate(selected_a):
+                    row = [str(a), result_ecc[i], result_rc[i]]  # ECC在前，RC在后
+                    f.write('\t'.join(row) + '\n')
     
     def start_function1(self):
         """启动功能1"""
